@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+if [ "$1" = "production" ]; then
+    webpack --config webpack.prod.config.ts
+else
+    webpack --config webpack.dev.config.ts
+fi
