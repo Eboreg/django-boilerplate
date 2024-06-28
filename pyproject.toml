@@ -18,12 +18,12 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
+    "flake8",
     "ipdb",
     "ipython",
     "isort",
+    "pylint-django",
     "pylint",
-    "flake8",
-    "django-debug-toolbar",
 ]
 
 [tool.setuptools.dynamic]
@@ -31,14 +31,23 @@ version = {attr = "__version__"}
 
 [tool.pylint.main]
 disable = [
+    "broad-exception-caught",
+    "import-outside-toplevel",
+    "invalid-name",
+    "invalid-str-returned",
     "missing-class-docstring",
     "missing-function-docstring",
     "missing-module-docstring",
-    "broad-exception-caught",
+    "too-few-public-methods",
+    "too-many-ancestors",
+    "too-many-arguments",
     "too-many-branches",
-    "import-outside-toplevel",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-return-statements",
+    "too-many-statements",
 ]
-ignore = [".venv"]
+ignore = [".venv", "node_modules"]
 max-line-length = 119
 
 [tool.isort]
@@ -55,7 +64,7 @@ sections = [
     "FIRSTPARTY",
     "LOCALFOLDER",
 ]
-skip = [".venv"]
+skip = [".venv", "node_modules"]
 
 [tool.mypy]
 follow_imports = "skip"
@@ -63,3 +72,7 @@ show_error_codes = true
 ignore_missing_imports = true
 files = "."
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+ignore_errors = true
+module = ["*.migrations.*"]

@@ -6,3 +6,4 @@
 **/.mypy_cache
 **/*.egg-info
 **/db.sqlite3
+.directory
