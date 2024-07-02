@@ -92,8 +92,8 @@ def main():
     parser.add_argument("project_name")
     parser.add_argument("parent", help="Parent directory of the project")
     parser.add_argument("-d", "--description", nargs="?", default="")
-    parser.add_argument("-nf", "--no-frontend", help="Don't copy frontend stuff.")
-    parser.add_argument("-ng", "--no-git", help="Don't run git init.")
+    parser.add_argument("-nf", "--no-frontend", help="Don't copy frontend stuff.", action="store_true")
+    parser.add_argument("-ng", "--no-git", help="Don't run git init.", action="store_true")
 
     args = parser.parse_args()
     destpath = create_dir(args.project_name, args.parent)
