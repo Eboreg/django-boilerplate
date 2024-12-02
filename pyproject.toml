@@ -13,6 +13,7 @@ requires-python = ">=3.10"
 dependencies = [
     "django",
     "python-dotenv",
+    "django-extensions",
 ]
 dynamic = ["version"]
 
@@ -48,6 +49,7 @@ disable = [
     "too-many-statements",
 ]
 ignore = [".venv", "node_modules"]
+ignore-patterns = ["^\\.#", ".*\\.pyi", "apps\\.py"]
 max-line-length = 119
 
 [tool.isort]
