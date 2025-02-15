@@ -27,6 +27,9 @@ dev = [
     "pylint",
 ]
 
+[project.scripts]
+m = "manage:main"
+
 [tool.setuptools.dynamic]
 version = {attr = "__version__"}
 
