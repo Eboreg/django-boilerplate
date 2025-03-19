@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 
-from os import chdir
+import argparse
 import random
-import shutil
-from pathlib import Path
 import re
+import shutil
 import string
 import subprocess
 import sys
-import argparse
 import venv
+from os import chdir
+from pathlib import Path
+
 
 srcpath = Path(__file__).parent
 
 
-def create_dir(dirname: str, parent: str) -> Path:
-    path = Path(parent).joinpath(dirname)
+def create_dir(path: Path):
     if path.exists():
-        print("Path already exists, aborting.")
-        sys.exit(1)
-    path.mkdir()
-    return path
+        if not path.is_dir():
+            print(f"Path {path} exists and is not a directory; aborting.")
+            sys.exit(1)
+        reply = input(f"Path {path} already exists. Use it anyway? [Y/n] ")
+        if reply.lower() == "n":
+            print("Aborting.")
+            sys.exit(1)
+    else:
+        path.mkdir(parents=True)
 
 
 def copy_pyproject_toml(destpath: Path, project_name: str, description: str):
@@ -90,23 +95,32 @@ def copy_base_files(destpath: Path, project_name: str, description: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("project_name")
-    parser.add_argument("parent", help="Parent directory of the project")
+    parser.add_argument("directory", help="Project root dir (default: cwd/project_name)", nargs="?")
     parser.add_argument("-d", "--description", nargs="?", default="")
     parser.add_argument("-nf", "--no-frontend", help="Don't copy frontend stuff.", action="store_true")
     parser.add_argument("-ng", "--no-git", help="Don't run git init.", action="store_true")
 
     args = parser.parse_args()
-    destpath = create_dir(args.project_name, args.parent)
+
+    if args.directory:
+        destpath = Path(args.directory)
+    else:
+        destpath = Path(args.project_name)
+
+    create_dir(destpath)
+    print(f"Using path `{destpath.absolute()}`.")
     copy_base_files(destpath=destpath, project_name=args.project_name, description=args.description)
     if not args.no_frontend:
         copy_frontend_files(destpath=destpath, project_name=args.project_name)
     chdir(destpath)
     venv.create(".venv", with_pip=True)
-    print("Created virtual environment in .venv.")
+    print(f"Created virtual environment in `{destpath.absolute() / '.venv'}`.")
     if not args.no_frontend:
+        print("Running `npm install`.")
         subprocess.run("npm i", shell=True, check=True)
     subprocess.run(". .venv/bin/activate && pip install -e .[dev]", shell=True, check=True)
     if not args.no_git:
+        print("Running `git init`.")
         subprocess.run("git init", shell=True, check=True)
 
 
