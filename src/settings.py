@@ -7,7 +7,8 @@ def env_boolean(key: str):
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+SRC_DIR = Path(__file__).resolve().parent
+BASE_DIR = SRC_DIR.parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -44,12 +45,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "urls"
+ROOT_URLCONF = f"{SRC_DIR.name}.urls"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [SRC_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -62,7 +63,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "wsgi.application"
+WSGI_APPLICATION = f"{SRC_DIR.name}.wsgi.application"
 
 
 # Database
@@ -91,12 +92,14 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Europe/Stockholm"
 USE_I18N = True
 USE_TZ = True
+LOCALE_PATHS = [SRC_DIR / "locale"]
 
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "static"
+STATICFILES_DIRS = [("assets", BASE_DIR / "assets")]
 
 
 # Default primary key field type

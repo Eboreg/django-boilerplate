@@ -1,37 +1,5 @@
-[build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools"]
-
-[project]
-name = "django-boilerplate"
-authors = [
-    {name = "Robert Huselius", email = "robert@huseli.us"},
-]
-description = "Django boilerplate"
-license = {file = "LICENSE"}
-requires-python = ">=3.10"
-dependencies = [
-    "django",
-    "python-dotenv",
-    "django-extensions",
-]
-dynamic = ["version"]
-
-[project.optional-dependencies]
-dev = [
-    "flake8",
-    "ipdb",
-    "ipython",
-    "isort",
-    "pylint-django",
-    "pylint",
-]
-
 [project.scripts]
-m = "manage:main"
-
-[tool.setuptools.dynamic]
-version = {attr = "__version__"}
+m = "{{project_name}}.manage:main"
 
 [tool.pylint.main]
 disable = [

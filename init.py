@@ -6,91 +6,202 @@ import re
 import shutil
 import string
 import subprocess
-import sys
 import venv
 from os import chdir
 from pathlib import Path
 
 
-srcpath = Path(__file__).parent
+class Runner:
+    base_filenames = [".flake8", ".gitignore", "LICENSE", ".editorconfig"]
+    description: str
+    project_name_camelcase: str
+    project_name: str
+    project_python_path: Path
+    project_root_path: Path
+    source_path = Path(__file__).parent.absolute()
+
+    def __init__(self, project_path: str | Path, project_name: str, description: str = ""):
+        if not re.match(r"^[a-zA-Z0-9\-_]+$", project_name):
+            raise ValueError("Project name can only contain alphanumeric characters, hyphens, and underscores.")
+
+        if isinstance(project_path, str):
+            project_path = Path(project_path)
+
+        self.project_root_path = project_path.absolute()
+        self.project_name = project_name
+        self.project_name_camelcase = self.project_name.replace("-", "_")
+        self.project_python_path = self.project_root_path / "src" / self.project_name_camelcase
+        self.description = description
+
+    def _1_create_project_dir(self, force: bool = False):
+        if self.project_root_path.exists():
+            if not self.project_root_path.is_dir():
+                raise ValueError(f"Path {self.project_root_path} exists and is not a directory; aborting.")
+            if not force:
+                raise ValueError(f"Path {self.project_root_path} already exists, aborting (use --force to use it anyway).")
+            print(f" * Path {self.project_root_path} already exists, using it anyway because --force.")
+        else:
+            self.project_root_path.mkdir(parents=True)
+            print(f"* Created project directory: {self.project_root_path}.")
+
+    def _2_generate_env_file(self):
+        secret_chars = (string.ascii_lowercase + string.digits + string.punctuation).replace("\"", "")
+        secret = "".join(random.choices(secret_chars, k=50))
+
+        with self.project_root_path.joinpath(".env").open("wt", encoding="utf8") as f:
+            f.write(f"DJANGO_SECRET_KEY=\"{secret}\"\n")
+            f.write("DEBUG=true\n")
+            f.write(f"DJANGO_SETTINGS_MODULE={self.project_name_camelcase}.settings\n")
+
+        print("* Wrote .env.")
+
+    def _2_write_readme(self):
+        with self.project_root_path.joinpath("README.md").open("wt", encoding="utf8") as readme:
+            readme.write(f"# {self.project_name}")
+            if self.description:
+                readme.write(f"\n{self.description}")
+
+        print("* Wrote README.md.")
+
+    def _2_init_git(self):
+        chdir(self.project_root_path)
+        subprocess.run("git init", shell=True, check=True)
+        print("* Ran git init.")
+
+    def _2_copy_frontend_files(self):
+        shutil.copytree(self.source_path.joinpath("assets"), self.project_root_path.joinpath("assets"))
+        shutil.copytree(self.source_path.joinpath("deployment"), self.project_root_path.joinpath("deployment"))
+
+        for filename in (
+            ".eslintrc.cjs",
+            "tsconfig.json",
+            "webpack.base.config.ts",
+            "webpack.dev.config.ts",
+            "webpack.prod.config.ts",
+        ):
+            shutil.copy(self.source_path.joinpath(filename), self.project_root_path.joinpath(filename))
+
+        print("* Wrote frontend stuff.")
+
+    def _2_copy_package_json(self):
+        with self.project_root_path.joinpath("package.json").open("wt", encoding="utf8") as outfile:
+            with self.source_path.joinpath("package.json").open("rt", encoding="utf8") as infile:
+                for line in infile:
+                    outfile.write(
+                        line.replace("{{project_name}}", self.project_name)
+                            .replace("{{description}}", self.description)
+                        )
+
+        print("* Wrote package.json.")
+
+    def _2_copy_base_files(self):
+        shutil.copytree(
+            self.source_path.joinpath("src"),
+            self.project_python_path,
+            ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"),
+            dirs_exist_ok=True,
+        )
+
+        for filename in self.base_filenames:
+            shutil.copy(self.source_path.joinpath(filename), self.project_root_path.joinpath(filename))
+
+        print("* Copied base files: " + ", ".join(self.base_filenames) + ".")
+
+    def _3_run_npm_install(self):
+        chdir(self.project_root_path)
+        subprocess.run("npm i", shell=True, check=True)
+        print("* Ran `npm install`.")
+
+    def _update_pyproject_toml(self):
+        with self.project_root_path.joinpath("pyproject.toml").open("at", encoding="utf8") as outfile:
+            with self.source_path.joinpath("pyproject.base.toml").open("rt", encoding="utf8") as infile:
+                outfile.write("\n")
+                for line in infile:
+                    outfile.write(line.replace("{{project_name}}", self.project_name_camelcase))
+
+    def run(self, force: bool = False, no_git: bool = False, no_frontend: bool = False):
+        self._1_create_project_dir(force=force)
+        self._2_write_readme()
+        self._2_generate_env_file()
+        self._2_copy_base_files()
+        if not no_git:
+            self._2_init_git()
+        if not no_frontend:
+            self._2_copy_frontend_files()
+            self._2_copy_package_json()
+            self._3_run_npm_install()
 
 
-def create_dir(path: Path, force: bool = False):
-    if path.exists():
-        if not path.is_dir():
-            print(f"Path {path} exists and is not a directory; aborting.")
-            sys.exit(1)
-        if not force:
-            print(f"Path {path} already exists, aborting. (Use --force to use it anyway)")
-            sys.exit(1)
-        print(f"Path {path} already exists, using it anyway because --force.")
-    else:
-        path.mkdir(parents=True)
-        print(f"Created project directory: {path}")
+class SetuptoolsRunner(Runner):
+    def _2_copy_pyproject_toml(self):
+        with self.project_root_path.joinpath("pyproject.toml").open("wt", encoding="utf8") as outfile:
+            with self.source_path.joinpath("pyproject.setuptools.toml").open("rt", encoding="utf8") as infile:
+                for line in infile:
+                    outfile.write(
+                        line.replace("{{project_name}}", self.project_name)
+                            .replace("{{description}}", self.description)
+                    )
+
+        self._update_pyproject_toml()
+
+        print("* Wrote pyproject.toml.")
+
+    def _2_create_venv(self):
+        chdir(self.project_root_path)
+        venv.create(".venv", with_pip=True)
+        print(f"* Created virtual environment in `{self.project_root_path / '.venv'}`.")
+
+    def _3_run_pip_install(self):
+        chdir(self.project_root_path)
+        subprocess.run(". .venv/bin/activate && pip install -e .[dev]", shell=True, check=True)
+        print("* Ran pip install.")
+
+    def run(self, force: bool = False, no_git: bool = False, no_frontend: bool = False):
+        super().run(force, no_git, no_frontend)
+        self._2_copy_pyproject_toml()
+        self._2_create_venv()
+        self._3_run_pip_install()
 
 
-def copy_pyproject_toml(root_path: Path, project_name: str, description: str):
-    with root_path.joinpath("pyproject.toml").open("wt", encoding="utf8") as outfile:
-        with srcpath.joinpath("pyproject.toml").open("rt", encoding="utf8") as infile:
-            section = ""
-            for line in infile:
-                if line.startswith("[") and line.strip().endswith("]"):
-                    section = line.strip("[]\n")
-                if section == "project" and re.match(r"^name *=.*", line):
-                    outfile.write(f"name = \"{project_name}\"\n")
-                elif section == "project" and re.match(r"^description *=.*", line):
-                    outfile.write(f"description = \"{description}\"\n")
-                else:
-                    outfile.write(line)
-    print("Wrote pyproject.toml.")
+class PoetryRunner(Runner):
+    base_filenames = [".flake8", ".gitignore", "LICENSE", ".editorconfig", "poetry.toml"]
 
+    def _3_init_poetry(self):
+        dependencies = ["django", "python-dotenv", "django-extensions"]
+        dev_dependencies = ["flake8", "ipdb", "ipython", "isort", "pylint", "pylint-django"]
+        chdir(self.project_root_path)
 
-def copy_package_json(destpath: Path, project_name: str):
-    with destpath.joinpath("package.json").open("wt", encoding="utf8") as outfile:
-        with srcpath.joinpath("package.json").open("rt", encoding="utf8") as infile:
-            for line in infile:
-                if re.match(r"^\s*\"name\"", line):
-                    outfile.write(f"  \"name\": \"{project_name}\",\n")
-                else:
-                    outfile.write(line)
-    print("Wrote package.json.")
+        subprocess.call([
+            "poetry",
+            "init",
+            "--name",
+            self.project_name,
+            "--description",
+            self.description,
+            "--author",
+            "Robert Huselius <robert@huseli.us>",
+            "--python",
+            ">=3.11,<4.0",
+            "--license",
+            "GPL-3.0-or-later",
+            "--no-interaction",
+            *[f"--dependency={dep}" for dep in dependencies],
+            *[f"--dev-dependency={dep}" for dep in dev_dependencies],
+        ])
 
+    def _4_update_pyproject_toml(self):
+        self._update_pyproject_toml()
+        print("* Updated pyproject.toml.")
 
-def copy_frontend_files(destpath: Path, project_name: str):
-    shutil.copytree(srcpath.joinpath("assets").absolute(), destpath.joinpath("assets").absolute())
-    shutil.copytree(srcpath.joinpath("deployment").absolute(), destpath.joinpath("deployment").absolute())
-    copy_package_json(destpath=destpath, project_name=project_name)
-    for filename in (
-        ".eslintrc.cjs",
-        "tsconfig.json",
-        "webpack.base.config.ts",
-        "webpack.dev.config.ts",
-        "webpack.prod.config.ts",
-    ):
-        shutil.copy(srcpath.joinpath(filename).absolute(), destpath.joinpath(filename).absolute())
-    print("Wrote frontend stuff.")
+    def _4_sync_poetry(self):
+        chdir(self.project_root_path)
+        subprocess.call(["poetry", "sync"])
 
-
-def generate_env_file(root_path: Path):
-    secret_chars = (string.ascii_lowercase + string.digits + string.punctuation).replace("\"", "")
-    secret = "".join(random.choices(secret_chars, k=50))
-    with root_path.joinpath(".env").open("wt", encoding="utf8") as f:
-        f.write(f"DJANGO_SECRET_KEY=\"{secret}\"\n")
-        f.write("DEBUG=true\n")
-    print("Wrote .env.")
-
-
-def copy_base_files(root_path: Path, project_name: str, description: str):
-    generate_env_file(root_path=root_path)
-    copy_pyproject_toml(root_path=root_path, project_name=project_name, description=description)
-    shutil.copytree(
-        srcpath.joinpath("src").absolute(),
-        root_path.joinpath("src").absolute(),
-        ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"),
-    )
-    for filename in (".flake8", ".gitignore", "LICENSE"):
-        shutil.copy(srcpath.joinpath(filename).absolute(), root_path.joinpath(filename).absolute())
-    print("Copied base files.")
+    def run(self, force: bool = False, no_git: bool = False, no_frontend: bool = False):
+        super().run(force, no_git, no_frontend)
+        self._3_init_poetry()
+        self._4_update_pyproject_toml()
+        self._4_sync_poetry()
 
 
 def main():
@@ -101,33 +212,20 @@ def main():
     parser.add_argument("-nf", "--no-frontend", help="Don't copy frontend stuff.", action="store_true")
     parser.add_argument("-ng", "--no-git", help="Don't run git init.", action="store_true")
     parser.add_argument("-f", "--force", help="Continue even if destination directory exists.", action="store_true")
+    parser.add_argument("-bs", "--build-system", choices=["poetry", "setuptools"], default="poetry")
 
     args = parser.parse_args()
+    runner_class = PoetryRunner if args.build_system == "poetry" else SetuptoolsRunner
 
-    if not re.match(r"^[a-zA-Z0-9\-_]+$", args.project_name):
-        print("Project name can only contain alphanumeric characters, hyphens, and underscores.")
-        sys.exit(1)
+    runner = runner_class(
+        project_path=args.directory if args.directory else args.project_name,
+        project_name=args.project_name,
+        description=args.description,
+    )
 
-    if args.directory:
-        root_path = Path(args.directory)
-    else:
-        root_path = Path(args.project_name)
-
-    create_dir(path=root_path, force=args.force)
-    print(f"Using path `{root_path.absolute()}`.")
-    copy_base_files(root_path=root_path, project_name=args.project_name, description=args.description)
-    if not args.no_frontend:
-        copy_frontend_files(destpath=root_path, project_name=args.project_name)
-    chdir(root_path)
-    venv.create(".venv", with_pip=True)
-    print(f"Created virtual environment in `{root_path.absolute() / '.venv'}`.")
-    if not args.no_frontend:
-        print("Running `npm install`.")
-        subprocess.run("npm i", shell=True, check=True)
-    subprocess.run(". .venv/bin/activate && pip install -e .[dev]", shell=True, check=True)
-    if not args.no_git:
-        print("Running `git init`.")
-        subprocess.run("git init", shell=True, check=True)
+    prompt = f"Create project {runner.project_name} in {runner.project_root_path} using {args.build_system}? [Y/n] "
+    if input(prompt).lower() != "n":
+        runner.run(force=args.force, no_git=args.no_git, no_frontend=args.no_frontend)
 
 
 if __name__ == "__main__":
